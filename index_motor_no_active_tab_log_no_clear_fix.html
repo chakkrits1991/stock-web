@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stock Management</title>
+<style>
+body{margin:0;font-family:'Segoe UI',Arial;background:#f4f6f8}
+header{background:#1f3c88;color:#fff;padding:16px;display:flex;justify-content:space-between;align-items:center}
+.lang-btn{background:#fff;color:#1f3c88;border:none;border-radius:20px;padding:6px 14px;font-weight:bold;cursor:pointer}
+.container{max-width:1200px;margin:20px auto;background:#fff;border-radius:10px;padding:20px}
+.tabs{display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap}
+.tab{padding:8px 14px;border-radius:18px;background:#e0e6ff;cursor:pointer}
+.tab.active{background:#1f3c88;color:#fff}
+.toolbar{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.search{padding:8px 12px;flex:1;border:1px solid #ccc;border-radius:6px;min-width:160px}
+.save{background:#4caf50;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer}
+.save:disabled{background:#9e9e9e}
+table{width:100%;border-collapse:collapse}
+th,td{border:1px solid #ddd;padding:6px;text-align:center}
+th{background:#eef2ff}
+input.qty{width:70px;text-align:center}
+tr.warn{background:#ffe6e6}
+.bubble{position:fixed;bottom:20px;right:20px;background:#d32f2f;color:#fff;padding:10px 14px;border-radius:8px;opacity:0;transition:.3s}
+.bubble.show{opacity:1}
+</style>
+</head>
+<body>
+
+<header>
+  <h2 id="title">📦 Stock Management</h2>
+  <div style="display:flex;gap:10px;align-items:center"><button class="lang-btn" onclick="openLog()" id="logBtn">Log</button><button class="lang-btn" id="langBtn" onclick="toggleLang()">EN</button></div>
+</header>
+
+<div class="container">
+  <div class="tabs">
+    <div class="tab" id="tabMotor" onclick="switchTab('Motor',this)">Motor</div>
+    <div class="tab" id="tabGearHead" onclick="switchTab('GearHead',this)">GearHead</div>
+    <div class="tab" id="tabSpeed" onclick="switchTab('SpeedController',this)">Speed Controller</div>
+    <div class="tab" id="tabGlass" onclick="switchTab('Glass',this)">Glass</div>
+    <div class="tab" id="tabInverter" onclick="switchTab('Inverter',this)">Inverter</div>
+    <div class="tab" id="tabShaft" onclick="switchTab('Shaft',this)">Shaft</div>
+
+  </div>
+
+  <div class="toolbar">
+    <input class="search" id="search" placeholder="Search..." onkeyup="searchTable()">
+    <button id="saveBtn" class="save" onclick="saveData()" disabled>Save</button>
+  </div>
+
+  <table class="log-table">
+    <thead>
+      <tr>
+        <th id="colItem">Item</th>
+        <th id="colStock">Stock</th>
+        <th id="colUsed">Used</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+
+<div id="logView" style="display:none;margin-top:20px">
+  <h3 id="logTitle">📜 Save History</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Type</th>
+        <th>Item</th>
+        <th>Stock (From → To)</th>
+        <th>Used (From → To)</th>
+      </tr>
+    </thead>
+    <tbody id="logBody"></tbody>
+  </table>
+</div>
+
+</div>
+
+<div class="bubble" id="bubble"></div>
+
+<script>
+let lang = localStorage.getItem("lang") || "en";
+const text = {
+  en:{
+    title:"📦 Stock Management",
+    search:"Search...",
+    save:"Save",
+    item:"Item",
+    stock:"Stock",
+    used:"Used",
+    bubble:"⚠ Used quantity exceeds stock",
+    tabMotor:"Motor",
+    tabGearHead:"GearHead",
+    tabSpeed:"Speed Controller",
+    tabGlass:"Glass",
+    tabInverter:"Inverter",
+    tabShaft:"Shaft",
+    tabLog:"Log"
+  },
+  kr:{
+    title:"📦 재고 관리 시스템",
+    search:"검색...",
+    save:"저장",
+    item:"품명",
+    stock:"재고수량",
+    used:"사용수량",
+    bubble:"⚠ 사용수량이 재고수량을 초과했습니다",
+    tabMotor:"모터",
+    tabGearHead:"기어헤드",
+    tabSpeed:"속도 컨트롤러",
+    tabGlass:"유리",
+    tabInverter:"인버터",
+    tabShaft:"샤프트",
+    tabLog:"로그"
+  }
+};
+
+
+// ===== FIX: SAFE TAB LOG REFERENCE =====
+function getTabLogEl(){
+  return document.getElementById("tabLog") || null;
+}
+// =====================================
+
+function applyLang(){
+  const t = text[lang];
+  title.innerText = t.title;
+  search.placeholder = t.search;
+  saveBtn.innerText = t.save;
+  colItem.innerText = t.item;
+  colStock.innerText = t.stock;
+  colUsed.innerText = t.used;
+  bubble.innerText = t.bubble;
+  tabMotor.innerText = t.tabMotor;
+  tabGearHead.innerText = t.tabGearHead;
+  tabSpeed.innerText = t.tabSpeed;
+  tabGlass.innerText = t.tabGlass;
+  tabInverter.innerText = t.tabInverter;
+  tabShaft.innerText = t.tabShaft;
+  tabLog.innerText = t.tabLog;
+  langBtn.innerText = lang.toUpperCase();
+}
+
+function toggleLang(){
+  lang = lang === "en" ? "kr" : "en";
+  localStorage.setItem("lang", lang);
+  applyLang();
+}
+
+
+let data = JSON.parse(localStorage.getItem("stockData")) || {
+  Motor:[['2TK3A-CW2', 1, 0], ['2TK3CGN-A', 1, 0], ['2TK3GN-CW2', 1, 0], ['5IK60GU-CF', 1, 0], ['5IK90GU-CF', 1, 0], ['8SDG2-25G-C', 1, 0], ['9IDG3-60FW', 1, 0], ['HF-KP43G1', 2, 0], ['K7IG15NC-SU', 1, 0], ['K9IP120FC-SU', 4, 0], ['K9IP60FC-SU', 4, 0], ['K9IP90FC-SU', 4, 0], ['S6I06GB', 12, 0], ['S6I06GB-S12', 3, 0], ['S6I06GB-V12', 3, 0], ['S6I06GT', 2, 0], ['S6R06GX-CE', 2, 0], ['S7I15GB', 1, 0], ['S7I15GB-V12', 1, 0], ['S7I15GD', 1, 0], ['S7I15GT', 6, 0], ['S7R15GCCE', 1, 0], ['S8I25GB', 2, 0], ['S8I25GB-S12', 9, 0], ['S8I25GB-V12', 1, 0], ['S8I25GT', 4, 0], ['S8R25GB-E', 6, 0], ['S9I180GB-V12', 2, 0], ['S9I190GTH', 1, 0], ['S9I40GBH-S12', 1, 0], ['S9I40GBH-V12', 1, 0], ['S9I90GBH-S12', 2, 0], ['S9I90GTH', 1, 0], ['S9I90GTH-E', 2, 0], ['S9R90GBH', 6, 0], ['SPIH060S-010K', 1, 0], ['USM590-502W', 1, 0]],
+  GearHead:[['2GN9S', 1, 0], ['2GN12.5K', 2, 0], ['2LF25N-1', 1, 0], ['3GN3.5K', 1, 0], ['4GN7.5K', 2, 0], ['4GN12.5K', 3, 0], ['5GU3.6KB', 1, 0], ['5GU12.5KB', 1, 0], ['5GU30KB', 1, 0], ['5GU36RA', 1, 0], ['8GBK3BMH', 1, 0], ['8GBK7.5BMH', 1, 0], ['K6G3C', 1, 0], ['K7G5B', 2, 0], ['K7G15B', 2, 0], ['K9P20BH', 8, 0], ['K9P30B', 3, 0], ['S6DA5B', 3, 0], ['S6DA12.5B', 2, 0], ['S6DA15B', 8, 0], ['S6DA30B', 2, 0], ['S6DA36B', 2, 0], ['S6DA40B', 1, 0], ['S6DA50B', 10, 0], ['S7KA3.6B', 3, 0], ['S7KA150B', 1, 0], ['S8KA3.6B', 1, 0], ['S8KA5B', 14, 0], ['S8KA7.5B', 4, 0], ['S8KA12.5B', 1, 0], ['S8KA20B', 2, 0], ['S8KA40B', 2, 0], ['S8KA60B', 6, 0], ['S8KA120B', 4, 0], ['S8KA150B', 2, 0], ['S8KA180B', 7, 0], ['S9GX10BH-S', 1, 0], ['S9KA90B', 2, 0], ['S9KB3.6BH', 2, 0], ['S9KB15BH', 5, 0], ['S9KC3BH', 1, 0], ['S9KC7.5BH', 1, 0], ['S9KC15BH', 1, 0], ['S9KC30BL', 1, 0], ['S9KC50BH-Z01', 4, 0], ['S9KC90BH', 1, 0], ['S9KH3.6B', 2, 0], ['S9KH12.5B', 1, 0], ['SC8KA50', 1, 0], ['SC8KA60', 10, 0], ['SC8KA90', 10, 0], ['SC8KA120', 6, 0], ['SC8HA180', 9, 0], ['VRAF-15C', 2, 0]],
+  SpeedController:[['FX3000-025S', 1, 0], ['GUS-C-15', 1, 0], ['GUS-C-60', 9, 0], ['GUS-C-90', 1, 0], ['GUS-C-120', 1, 0], ['SRB01', 3, 0], ['SRB02', 2, 0], ['SRC02', 1, 0], ['SUA60IB-V12', 2, 0], ['SUA90IB-V12', 1, 0], ['SUA180IB-V12', 2, 0]],
+  Glass:[['230 × 355', 1, 0], ['230 × 390', 1, 0], ['290 × 340', 4, 0], ['290 × 590', 1, 0], ['340 × 390', 27, 0], ['340 × 490', 15, 0], ['340 × 590', 2, 0], ['380 × 330', 2, 0], ['380 × 530', 10, 0], ['390 × 290', 20, 0], ['390 × 340', 8, 0], ['390 × 390', 4, 0], ['390 × 540', 4, 0], ['390 × 590', 2, 0], ['435 × 585', 1, 0], ['440 × 340', 12, 0], ['440 × 390', 16, 0], ['490 × 340', 1, 0], ['490 × 390', 22, 0], ['490 × 490', 2, 0], ['490 × 590', 1, 0], ['495 × 345', 4, 0], ['495 × 495', 10, 0], ['560 × 360', 3, 0], ['560 × 370', 3, 0], ['570 × 370', 2, 0], ['590 × 590', 2, 0], ['590 × 690', 1, 0], ['590 × 700', 1, 0], ['590 × 740', 1, 0], ['730 × 430', 4, 0]],
+  Inverter:[['FR-E720-0.1k', 3, 0], ['FR-E74C-1.5k', 2, 0], ['FR-S520E-2.2k', 2, 0], ['LSLV0008G100C-4EONN', 3, 0], ['LSLV0008M100-1EOFNS', 1, 0], ['LSLV0040G100-2EONN', 1, 0]],
+  Shaft:[['10Ø 55 M5-N5', 4, 0], ['10Ø 63 M5-N5', 20, 0], ['10Ø 76 M6-N6', 6, 0], ['10Ø 85 M5-N5', 5, 0], ['10Ø 90 M5-N5', 5, 0], ['10Ø 96 M5-N5', 2, 0], ['10Ø 115 M5-N5', 2, 0], ['12Ø 90 M5-N5', 6, 0], ['12Ø 166 M5-N5', 4, 0], ['12Ø 185 M6-N6', 2, 0], ['12Ø 200 M6-N6', 9, 0], ['12Ø 206 M6-N6', 9, 0], ['15Ø 124 M6-N6', 4, 0], ['16Ø 60 M6-N6', 2, 0], ['16Ø 100 M6-N6', 2, 0], ['16Ø 115 M6-N6', 6, 0], ['16Ø 125 M6-N6', 4, 0], ['20Ø 65 M5-N5', 4, 0], ['20Ø 76 M6-N6', 4, 0], ['20Ø 84 M6-N6', 12, 0], ['20Ø 120 M6-N6', 2, 0], ['20Ø 125 M6-N6', 8, 0], ['20Ø 191 M8-N8', 7, 0], ['25Ø 80 M6-N6', 4, 0], ['25Ø 226 M10-N10', 3, 0], ['25Ø 276 M10-N10', 4, 0]]
+};
+
+
+let snapshot = JSON.stringify(data);
+
+// 🛠 FIX: restore default data if localStorage has empty data
+const defaultData = {
+  Motor: [['2TK3A-CW2', 1, 0], ['2TK3CGN-A', 1, 0], ['2TK3GN-CW2', 1, 0], ['5IK60GU-CF', 1, 0], ['5IK90GU-CF', 1, 0], ['8SDG2-25G-C', 1, 0], ['9IDG3-60FW', 1, 0], ['HF-KP43G1', 2, 0], ['K7IG15NC-SU', 1, 0], ['K9IP120FC-SU', 4, 0], ['K9IP60FC-SU', 4, 0], ['K9IP90FC-SU', 4, 0], ['S6I06GB', 12, 0], ['S6I06GB-S12', 3, 0], ['S6I06GB-V12', 3, 0], ['S6I06GT', 2, 0], ['S6R06GX-CE', 2, 0], ['S7I15GB', 1, 0], ['S7I15GB-V12', 1, 0], ['S7I15GD', 1, 0], ['S7I15GT', 6, 0], ['S7R15GCCE', 1, 0], ['S8I25GB', 2, 0], ['S8I25GB-S12', 9, 0], ['S8I25GB-V12', 1, 0], ['S8I25GT', 4, 0], ['S8R25GB-E', 6, 0], ['S9I180GB-V12', 2, 0], ['S9I190GTH', 1, 0], ['S9I40GBH-S12', 1, 0], ['S9I40GBH-V12', 1, 0], ['S9I90GBH-S12', 2, 0], ['S9I90GTH', 1, 0], ['S9I90GTH-E', 2, 0], ['S9R90GBH', 6, 0], ['SPIH060S-010K', 1, 0], ['USM590-502W', 1, 0]],
+  GearHead: [['2GN9S', 1, 0], ['2GN12.5K', 2, 0], ['2LF25N-1', 1, 0], ['3GN3.5K', 1, 0], ['4GN7.5K', 2, 0], ['4GN12.5K', 3, 0], ['5GU3.6KB', 1, 0], ['5GU12.5KB', 1, 0], ['5GU30KB', 1, 0], ['5GU36RA', 1, 0], ['8GBK3BMH', 1, 0], ['8GBK7.5BMH', 1, 0], ['K6G3C', 1, 0], ['K7G5B', 2, 0], ['K7G15B', 2, 0], ['K9P20BH', 8, 0], ['K9P30B', 3, 0], ['S6DA5B', 3, 0], ['S6DA12.5B', 2, 0], ['S6DA15B', 8, 0], ['S6DA30B', 2, 0], ['S6DA36B', 2, 0], ['S6DA40B', 1, 0], ['S6DA50B', 10, 0], ['S7KA3.6B', 3, 0], ['S7KA150B', 1, 0], ['S8KA3.6B', 1, 0], ['S8KA5B', 14, 0], ['S8KA7.5B', 4, 0], ['S8KA12.5B', 1, 0], ['S8KA20B', 2, 0], ['S8KA40B', 2, 0], ['S8KA60B', 6, 0], ['S8KA120B', 4, 0], ['S8KA150B', 2, 0], ['S8KA180B', 7, 0], ['S9GX10BH-S', 1, 0], ['S9KA90B', 2, 0], ['S9KB3.6BH', 2, 0], ['S9KB15BH', 5, 0], ['S9KC3BH', 1, 0], ['S9KC7.5BH', 1, 0], ['S9KC15BH', 1, 0], ['S9KC30BL', 1, 0], ['S9KC50BH-Z01', 4, 0], ['S9KC90BH', 1, 0], ['S9KH3.6B', 2, 0], ['S9KH12.5B', 1, 0], ['SC8KA50', 1, 0], ['SC8KA60', 10, 0], ['SC8KA90', 10, 0], ['SC8KA120', 6, 0], ['SC8HA180', 9, 0], ['VRAF-15C', 2, 0]],
+  SpeedController: [['FX3000-025S', 1, 0], ['GUS-C-15', 1, 0], ['GUS-C-60', 9, 0], ['GUS-C-90', 1, 0], ['GUS-C-120', 1, 0], ['SRB01', 3, 0], ['SRB02', 2, 0], ['SRC02', 1, 0], ['SUA60IB-V12', 2, 0], ['SUA90IB-V12', 1, 0], ['SUA180IB-V12', 2, 0]],
+  Glass: [['230 × 355', 1, 0], ['230 × 390', 1, 0], ['290 × 340', 4, 0], ['290 × 590', 1, 0], ['340 × 390', 27, 0], ['340 × 490', 15, 0], ['340 × 590', 2, 0], ['380 × 330', 2, 0], ['380 × 530', 10, 0], ['390 × 290', 20, 0], ['390 × 340', 8, 0], ['390 × 390', 4, 0], ['390 × 540', 4, 0], ['390 × 590', 2, 0], ['435 × 585', 1, 0], ['440 × 340', 12, 0], ['440 × 390', 16, 0], ['490 × 340', 1, 0], ['490 × 390', 22, 0], ['490 × 490', 2, 0], ['490 × 590', 1, 0], ['495 × 345', 4, 0], ['495 × 495', 10, 0], ['560 × 360', 3, 0], ['560 × 370', 3, 0], ['570 × 370', 2, 0], ['590 × 590', 2, 0], ['590 × 690', 1, 0], ['590 × 700', 1, 0], ['590 × 740', 1, 0], ['730 × 430', 4, 0]],
+  Inverter: [['FR-E720-0.1k', 3, 0], ['FR-E74C-1.5k', 2, 0], ['FR-S520E-2.2k', 2, 0], ['LSLV0008G100C-4EONN', 3, 0], ['LSLV0008M100-1EOFNS', 1, 0], ['LSLV0040G100-2EONN', 1, 0]],
+  Shaft: [['10Ø 55 M5-N5', 4, 0], ['10Ø 63 M5-N5', 20, 0], ['10Ø 76 M6-N6', 6, 0], ['10Ø 85 M5-N5', 5, 0], ['10Ø 90 M5-N5', 5, 0], ['10Ø 96 M5-N5', 2, 0], ['10Ø 115 M5-N5', 2, 0], ['12Ø 90 M5-N5', 6, 0], ['12Ø 166 M5-N5', 4, 0], ['12Ø 185 M6-N6', 2, 0], ['12Ø 200 M6-N6', 9, 0], ['12Ø 206 M6-N6', 9, 0], ['15Ø 124 M6-N6', 4, 0], ['16Ø 60 M6-N6', 2, 0], ['16Ø 100 M6-N6', 2, 0], ['16Ø 115 M6-N6', 6, 0], ['16Ø 125 M6-N6', 4, 0], ['20Ø 65 M5-N5', 4, 0], ['20Ø 76 M6-N6', 4, 0], ['20Ø 84 M6-N6', 12, 0], ['20Ø 120 M6-N6', 2, 0], ['20Ø 125 M6-N6', 8, 0], ['20Ø 191 M8-N8', 7, 0], ['25Ø 80 M6-N6', 4, 0], ['25Ø 226 M10-N10', 3, 0], ['25Ø 276 M10-N10', 4, 0]]
+};
+
+if (!data.Motor || data.Motor.length === 0) {
+  console.warn("Motor data empty → restoring default data");
+  data = JSON.parse(JSON.stringify(defaultData));
+  localStorage.setItem("stockData", JSON.stringify(data));
+}
+
+
+
+// 🔄 CLEAR LOGS (one-time)
+localStorage.removeItem("stockLogs");
+
+let logs = [];
+
+function diffData(oldData, newData){
+  const changes = [];
+  for(const type in newData){
+    newData[type].forEach((row, i)=>{
+      const oldRow = oldData[type][i];
+      if(!oldRow) return;
+      if(oldRow[1] !== row[1] || oldRow[2] !== row[2]){
+        changes.push({
+          type,
+          item: row[0],
+          stockFrom: oldRow[1],
+          stockTo: row[1],
+          usedFrom: oldRow[2],
+          usedTo: row[2]
+        });
+      }
+    });
+  }
+  return changes;
+}
+
+let currentTab = "Motor";
+let currentSearch = "";
+
+
+function showDataView(){
+  const tbl = document.querySelector("table");
+  const tb = document.querySelector(".toolbar");
+  if(tbl) tbl.style.display = "table";
+  if(tb) tb.style.display = "flex";
+  if(typeof logView !== "undefined") logView.style.display = "none";
+}
+
+function hasChanged(){
+  return JSON.stringify(data) !== snapshot;
+}
+
+function render(){
+  tbody.innerHTML = "";
+  data[currentTab].forEach((r,i)=>{
+    const warn = r[2] > r[1] ? "warn" : "";
+    tbody.innerHTML += `<tr class="${warn}">
+      <td>${r[0]}</td>
+      <td><input class="qty" type="number" min="0" value="${r[1]}" onchange="updateQty(${i},1,this.value)"></td>
+      <td><input class="qty" type="number" min="0" value="${r[2]}" onchange="updateQty(${i},2,this.value)"></td>
+    </tr>`;
+  });
+  applySearch();
+}
+
+function updateQty(i,c,v){
+  let n = Number(v); if(n < 0) n = 0;
+  data[currentTab][i][c] = n;
+  if(data[currentTab][i][2] > data[currentTab][i][1]) showBubble();
+  saveBtn.disabled = !hasChanged();
+  render();
+}
+
+function showBubble(){
+  bubble.classList.add("show");
+  clearTimeout(bubble._t);
+  bubble._t = setTimeout(()=>bubble.classList.remove("show"),2000);
+}
+
+function searchTable(){
+  currentSearch = search.value.toUpperCase();
+  applySearch();
+}
+
+function applySearch(){
+  document.querySelectorAll("#tbody tr").forEach(r=>{
+    r.style.display = r.innerText.toUpperCase().includes(currentSearch) ? "" : "none";
+  });
+}
+
+function switchTab(t,el){
+  showDataView();
+
+  document.querySelector(".toolbar").style.display = "flex";
+  document.querySelector("table").style.display = "table";
+  logView.style.display = "none";
+
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+  el.classList.add("active");
+  currentTab = t;
+  render();
+}
+
+
+function saveData(){
+  for(const type in data){
+    for(const row of data[type]){
+      if(row[2] > row[1]){
+        showBubble();
+        alert(lang==="en" ? "Cannot save. Used quantity exceeds stock." : "저장할 수 없습니다. 사용수량이 재고수량을 초과했습니다.");
+        return;
+      }
+    }
+  }
+
+  const oldData = JSON.parse(snapshot);
+  const changes = diffData(oldData, data);
+
+  if(changes.length === 0){
+    alert(lang==="en" ? "No changes to save." : "변경된 내용이 없습니다.");
+    return;
+  }
+
+  logs.push({
+    time: new Date().toISOString(),
+    changes
+  });
+
+  localStorage.setItem("stockLogs", JSON.stringify(logs));
+  localStorage.setItem("stockData", JSON.stringify(data));
+  snapshot = JSON.stringify(data);
+  saveBtn.disabled = true;
+
+  alert(lang==="en" ? "Saved successfully" : "저장되었습니다");
+}
+
+
+applyLang();
+render();
+
+function openLog(){
+  // hide edit UI
+  document.querySelector(".toolbar").style.display = "none";
+
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+  
+  document.querySelector("table").style.display="none";
+  logView.style.display="block";
+  renderLogs();
+}
+
+function renderLogs(){
+  const logs = JSON.parse(localStorage.getItem("stockLogs")) || [];
+  logBody.innerHTML = "";
+  logs.slice().reverse().forEach(log=>{
+    log.changes.forEach(ch=>{
+      logBody.innerHTML += `<tr>
+        <td>${new Date(log.time).toLocaleString()}</td>
+        <td>${ch.type}</td>
+        <td>${ch.item}</td>
+        <td>${ch.stockFrom} → ${ch.stockTo}</td>
+        <td>${ch.usedFrom} → ${ch.usedTo}</td>
+      </tr>`;
+    });
+  });
+}
+
+
+// 🔰 Ensure Motor tab is default on load
+document.addEventListener("DOMContentLoaded", () => {
+  setTimeout(()=>{ switchTab('Motor', document.getElementById('tabMotor')); },0);
+  if(typeof logView !== "undefined") logView.style.display = "none";
+  const tbl = document.querySelector("table");
+  if(tbl) tbl.style.display = "table";
+  const tb = document.querySelector(".toolbar");
+  if(tb) tb.style.display = "flex";
+  render();
+});
+
+
+// ================= UNIFIED STATE + LOG =================
+let appState = JSON.parse(localStorage.getItem("appState") || "{}");
+
+
+function saveAppState(){
+  appState.data = data;
+  appState.logs = appState.logs || [];
+  localStorage.setItem("appState", JSON.stringify(appState));
+}
+
+function addLog(entry){
+  appState.logs.push({
+    time: new Date().toLocaleString(),
+    ...entry
+  });
+  saveAppState();
+}
+
+function renderLogTab(){
+  const tbody = document.getElementById("tbody");
+  if(!tbody) return;
+  tbody.innerHTML = "";
+  if(!appState.logs.length){
+    tbody.innerHTML = `<tr><td colspan="5">(no logs)</td></tr>`;
+    return;
+  }
+  appState.logs.slice().reverse().forEach(l => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${l.time}</td>
+      <td>${l.type}</td>
+      <td>${l.item}</td>
+      <td>${l.stock}</td>
+      <td>${l.used}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// hook save button (if exists)
+const _origSave = typeof saveData === "function" ? saveData : null;
+if(_origSave){
+  saveData = function(){
+    _origSave();
+    addLog({type: currentTab, item: "SAVE", stock:"-", used:"-"});
+  }
+}
+
+// hook tab
+const _origSwitch = switchTab;
+switchTab = function(t, el){
+  _origSwitch(t, el);
+  if(t === "Log") renderLogTab();
+}
+// =======================================================
+
+</script>
+
+</body>
+</html>
