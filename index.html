@@ -96,7 +96,8 @@ const text = {
     tabGlass:"Glass",
     tabInverter:"Inverter",
     tabShaft:"Shaft",
-    tabLog:"Log"
+    tabLog:"Log",
+    langBtn:"EN"
   },
   kr:{
     title:"📦 재고 관리 시스템",
@@ -112,7 +113,8 @@ const text = {
     tabGlass:"유리",
     tabInverter:"인버터",
     tabShaft:"샤프트",
-    tabLog:"로그"
+    tabLog:"로그",
+    langBtn:"KR"
   }
 };
 
@@ -132,7 +134,7 @@ function applyLang(){
   tabInverter.innerText = t.tabInverter;
   tabShaft.innerText = t.tabShaft;
   tabLog.innerText = t.tabLog;
-  langBtn.innerText = lang.toUpperCase();
+  langBtn.innerText = t..langBtn();
 }
 
 function toggleLang(){
