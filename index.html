@@ -105,7 +105,34 @@ function searchTable(){currentSearch=search.value.toUpperCase();applySearch();}
 function applySearch(){document.querySelectorAll("#tbody tr").forEach(r=>{r.style.display=r.innerText.toUpperCase().includes(currentSearch)?"":"none";});}
 function showBubble(){bubble.classList.add("show");clearTimeout(bubble._t);bubble._t=setTimeout(()=>bubble.classList.remove("show"),2000);}
 function switchTab(t,el){document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));el.classList.add("active");currentTab=t;render();}
-function saveData(){if(!hasChanged())return;localStorage.setItem("stockData",JSON.stringify(data));snapshot=JSON.stringify(data);saveBtn.disabled=true;alert(lang==="en"?"Saved":"저장되었습니다");}
+function saveData() {
+  // 🔍 ตรวจสอบทุก Type ทุกแถว
+  for (const type in data) {
+    for (const row of data[type]) {
+      const stock = row[1];
+      const used  = row[2];
+
+      if (used > stock) {
+        // ❌ เจอข้อมูลผิด → ไม่ให้บันทึก
+        showBubble(); // ใช้ bubble เดิม
+        alert(
+          lang === "en"
+            ? "Cannot save. Used quantity exceeds stock."
+            : "저장할 수 없습니다. 사용수량이 재고수량을 초과했습니다."
+        );
+        return; // ⛔ ออกจากฟังก์ชันทันที
+      }
+    }
+  }
+
+  // ✅ ผ่านเงื่อนไขทั้งหมด → บันทึกได้
+  localStorage.setItem("stockData", JSON.stringify(data));
+  snapshot = JSON.stringify(data);
+  saveBtn.disabled = true;
+
+  alert(lang === "en" ? "Saved successfully" : "저장되었습니다");
+}
+
 
 applyLang();
 render();
